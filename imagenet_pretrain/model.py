@@ -1,13 +1,15 @@
 from functools import partial, partialmethod
 import torchvision
 import torch
+from torch.hub import load_state_dict_from_url
+from torchvision.models import ResNet18_Weights
 from torchvision.models.resnet import (
     BasicBlock,
     _resnet,
     conv1x1,
-    load_state_dict_from_url,
+    # load_state_dict_from_url,
     ResNet as BaseResNet,
-    model_urls,
+    # model_urls,
 )
 
 

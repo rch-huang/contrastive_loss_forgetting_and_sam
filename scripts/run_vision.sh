@@ -42,13 +42,13 @@ else
     SAM_FLAG=""
 fi
 
-CUDA_VISIBLE_DEVICES=${CUDA_DEVICE} python -m img_exps.main_vision \
-    --dataset ${DATASET} \
-    --method ${METHOD} \
-    --data-folder ${DATA_DIR} \
-    --output-folder ${OUTPUT_DIR} \
-    --seed ${SEED} \
-    --batch-size ${BATCH_SIZE} \
-    --epochs-per-task ${EPOCHS} \
-    --save-models ${PT_FLAG} ${CKPT_FLAG} ${SAM_FLAG} \
+#CUDA_VISIBLE_DEVICES=${CUDA_DEVICE} 
+python -m img_exps.main_vision \
+    --dataset cifar100 \
+    --method sgd \
+    --data-folder ./data \
+    --output-folder ./output \
+    --seed 42 \
+    --batch-size 256 \
+    --epochs-per-task 350 \
     --lr 0.01
