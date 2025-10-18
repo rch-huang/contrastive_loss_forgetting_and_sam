@@ -29,13 +29,13 @@ def download_data(dataset, folder):
             r.content
         )
     else:
-        torchvision.datasets.CIFAR100(folder, True, download=True)
-        torchvision.datasets.CIFAR100(folder, False, download=True)
+        torchvision.datasets.CIFAR10(folder, True, download=True)
+        torchvision.datasets.CIFAR10(folder, False, download=True)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--dataset", choices=["5data", "cifar100"], required=True)
+    parser.add_argument("--dataset", choices=["5data", "cifar100","cifar10"], required=True)
     parser.add_argument("--folder", required=True)
     args = parser.parse_args()
     download_data(args.dataset, args.folder)

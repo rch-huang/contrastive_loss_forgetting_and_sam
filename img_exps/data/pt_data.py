@@ -51,10 +51,15 @@ class FilteredDataset(torch.utils.data.Dataset):
         return x
 
 
-def get_dataloader(dataset, batch_size, shuffle=False):
+def get_dataloader(dataset, batch_size, shuffle=False,collate_fn=None):
     """Get dataloader for dataset."""
+    if collate_fn is not None:
+        return torch.utils.data.DataLoader(
+            dataset, batch_size=batch_size, num_workers=1, shuffle=shuffle, pin_memory=True,
+            collate_fn=collate_fn
+        )
     return torch.utils.data.DataLoader(
-        dataset, batch_size=batch_size, num_workers=4, shuffle=shuffle, pin_memory=True
+        dataset, batch_size=batch_size, num_workers=1, shuffle=shuffle, pin_memory=True
     )
 
 
@@ -76,7 +81,27 @@ def create_task_transform(class_to_task_class):
     """
     return torchvision.transforms.Lambda(lambda x: (x[0], class_to_task_class[x[1]]))
 
-
+def get_transforms():
+    # SupCon/SimCLR-style strong augments
+    train_tf_strong = torchvision.transforms.Compose([
+        torchvision.transforms.RandomResizedCrop(32, scale=(0.2, 1.0)),
+        torchvision.transforms.RandomHorizontalFlip(),
+        torchvision.transforms.RandomApply([torchvision.transforms.ColorJitter(0.4, 0.4, 0.4, 0.1)], p=0.8),
+        torchvision.transforms.RandomGrayscale(p=0.2),
+        torchvision.transforms.GaussianBlur(kernel_size=3, sigma=(0.1, 2.0)),
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+    ])
+    eval_tf = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        torchvision.transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+    ])
+    return train_tf_strong, eval_tf
+class TwoCropsTransform:
+    def __init__(self, base):
+        self.base = base
+    def __call__(self, x):
+        return [self.base(x), self.base(x)]
 def get_split_cifar100(dataset_location, batch_size, get_val=False, saved_tasks=None,
                        get_subset=False, num_subset_examples=100, subset_batch_size=64):
     """Get Split CIFAR-100 dataset that is split randomly. Returns the dataloaders
@@ -101,23 +126,39 @@ def get_split_cifar100(dataset_location, batch_size, get_val=False, saved_tasks=
             ),
         ]
     )
+    aug_transform_train, aug_transform_eval = get_transforms()
     test_dataset = torchvision.datasets.CIFAR100(
         dataset_location,
-        transform=transform,
+        transform=aug_transform_eval,
         target_transform=None,
         train=False,
     )
     train_dataset = torchvision.datasets.CIFAR100(
         dataset_location,
-        transform=transform,
+        transform=TwoCropsTransform(aug_transform_train),
         target_transform=None,
         train=True,
     )
-
+    raw_train_dataset = torchvision.datasets.CIFAR100(
+        dataset_location,
+        transform=aug_transform_eval,
+        target_transform=None,
+        train=True,
+    )
+    def collate(batch):
+        qs, ks, ys = [], [], []
+        for (qk, y) in batch:
+            qs.append(qk[0])
+            ks.append(qk[1])
+            ys.append(y)
+        x = torch.stack(qs + ks, 0)
+        y = torch.tensor(ys + ys, dtype=torch.long)
+        return x, y
+    
     # Create the task split
     classes = list(range(100))
     random.shuffle(classes)
-    tasks = [classes[i * 5 : (i + 1) * 5] for i in range(20)]
+    tasks = [classes[i * 10 : (i + 1) * 10] for i in range(10)]
     if saved_tasks is not None:
         tasks = saved_tasks
     class_to_task_class = {}
@@ -135,6 +176,12 @@ def get_split_cifar100(dataset_location, batch_size, get_val=False, saved_tasks=
             transform=create_task_transform(class_to_task_class),
             metainfo_func=lambda dataset, i: dataset.targets[i],
         )
+        raw_train_subset = FilteredDataset(
+            raw_train_dataset,
+            create_cifar_filter_func(task, False),
+            transform=create_task_transform(class_to_task_class),
+            metainfo_func=lambda dataset, i: dataset.targets[i],
+        )
         if get_val:
             train_subset, test_subset = get_random_split(train_subset, 0.9)
         else:
@@ -145,8 +192,9 @@ def get_split_cifar100(dataset_location, batch_size, get_val=False, saved_tasks=
                 metainfo_func=lambda dataset, i: dataset.targets[i],
             )
         task_dataloaders = {
-            "train": get_dataloader(train_subset, batch_size, shuffle=True),
+            "train": get_dataloader(train_subset, batch_size, shuffle=False, collate_fn=collate),
             "test": get_dataloader(test_subset, batch_size, shuffle=False),
+            "raw_train": get_dataloader(raw_train_subset, batch_size, shuffle=False),
         }
         dataloaders.append(task_dataloaders)
 
