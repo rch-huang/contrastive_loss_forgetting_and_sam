@@ -29,8 +29,8 @@ def download_data(dataset, folder):
             r.content
         )
     else:
-        torchvision.datasets.CIFAR10(folder, True, download=True)
-        torchvision.datasets.CIFAR10(folder, False, download=True)
+        torchvision.datasets.CIFAR100(folder, True, download=True)
+        torchvision.datasets.CIFAR100(folder, False, download=True)
 
 
 def main():

@@ -11,7 +11,44 @@ from torchvision.models.resnet import (
     ResNet as BaseResNet,
     # model_urls,
 )
+import torch.nn.functional as F
 
+
+
+
+
+class ResNet18WithProjection(torch.nn.Module):
+    
+    def __init__(self, hidden=2048, out_dim=128):
+        super().__init__()
+        # Backbone: ResNet18 with CIFAR tweaks
+        self.backbone = torchvision.models.resnet.ResNet(BasicBlock, [2, 2, 2, 2])
+        self.backbone.conv1 = torch.nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        self.backbone.maxpool = torch.nn.Identity()
+        self.backbone.fc = torch.nn.Identity()  # produce 512-d features
+
+        # Projection head (exactly as given)
+        self.projection = torch.nn.Sequential(
+            torch.nn.Linear(512, hidden, bias=False),
+            torch.nn.BatchNorm1d(hidden),
+            torch.nn.ReLU(inplace=True),
+            torch.nn.Linear(hidden, out_dim)
+        )
+
+        # handy attributes
+        self.feature_dim = 512
+        self.proj_hidden = hidden
+        self.proj_out_dim = out_dim
+
+    def forward_features(self, x):
+        """Return 512-d features from the backbone (before projection)."""
+        return self.backbone(x)
+
+    def forward(self, x):
+        """Return normalized projection head output (128-d by default)."""
+        feats = self.forward_features(x)              # [B, 512]
+        z = self.projection(feats)                    # [B, out_dim]
+        return F.normalize(z, dim=1)
 
 class RNet(BaseResNet):
     def __init__(

@@ -145,6 +145,12 @@ def get_split_cifar100(dataset_location, batch_size, get_val=False, saved_tasks=
         target_transform=None,
         train=True,
     )
+    aug_test_dataset = torchvision.datasets.CIFAR100(
+        dataset_location,
+        transform=TwoCropsTransform(aug_transform_train),
+        target_transform=None,
+        train=False,
+    )
     def collate(batch):
         qs, ks, ys = [], [], []
         for (qk, y) in batch:
@@ -191,10 +197,17 @@ def get_split_cifar100(dataset_location, batch_size, get_val=False, saved_tasks=
                 transform=create_task_transform(class_to_task_class),
                 metainfo_func=lambda dataset, i: dataset.targets[i],
             )
+            aug_test_subset = FilteredDataset(
+                aug_test_dataset,
+                create_cifar_filter_func(task, False),
+                transform=create_task_transform(class_to_task_class),
+                metainfo_func=lambda dataset, i: dataset.targets[i],
+            )
         task_dataloaders = {
             "train": get_dataloader(train_subset, batch_size, shuffle=False, collate_fn=collate),
             "test": get_dataloader(test_subset, batch_size, shuffle=False),
             "raw_train": get_dataloader(raw_train_subset, batch_size, shuffle=False),
+            "aug_test": get_dataloader(aug_test_subset, batch_size, shuffle=False, collate_fn=collate),
         }
         dataloaders.append(task_dataloaders)
 
